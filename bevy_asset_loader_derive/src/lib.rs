@@ -10,6 +10,7 @@ extern crate proc_macro;
 
 mod assets;
 
+use bevy_macro_utils::BevyManifest;
 use proc_macro::TokenStream;
 use std::option::Option::Some;
 use std::result::Result::{Err, Ok};
@@ -158,10 +159,15 @@ fn impl_asset_collection(
     let asset_loading = assets.iter().fold(quote!(), |token_stream, asset| {
         asset.attach_token_stream_for_loading(token_stream)
     });
+
+    let manifest = BevyManifest::default();
+    let bevy_ecs = manifest.get_subcrate("ecs").unwrap();
+    let bevy_asset = manifest.get_subcrate("asset").unwrap();
+
     let load_function = quote! {
-            fn load(world: &mut ::bevy::ecs::world::World) -> Vec<::bevy::prelude::HandleUntyped> {
+            fn load(world: &mut #bevy_ecs::world::World) -> Vec<#bevy_asset::HandleUntyped> {
                 let cell = world.cell();
-                let asset_server = cell.get_resource::<::bevy::prelude::AssetServer>().expect("Cannot get AssetServer");
+                let asset_server = cell.get_resource::<#bevy_asset::AssetServer>().expect("Cannot get AssetServer");
                 let asset_keys = cell.get_resource::<bevy_asset_loader::prelude::DynamicAssets>().expect("Cannot get bevy_asset_loader::prelude::DynamicAssets");
                 let mut handles = vec![];
                 #asset_loading
@@ -172,7 +178,7 @@ fn impl_asset_collection(
     let mut prepare_from_world = quote! {};
     prepare_from_world.append_all(from_world_fields.iter().fold(
         quote!(),
-        |es, _| quote! (#es ::bevy::ecs::world::FromWorld::from_world(world),),
+        |es, _| quote! (#es #bevy_ecs::world::FromWorld::from_world(world),),
     ));
 
     let mut asset_creation = assets.iter().fold(quote!(), |token_stream, asset| {
@@ -186,10 +192,10 @@ fn impl_asset_collection(
         tokens
     }));
     let create_function = quote! {
-        fn create(world: &mut ::bevy::ecs::world::World) -> Self {
+        fn create(world: &mut #bevy_ecs::world::World) -> Self {
             let from_world_fields = (#prepare_from_world);
             world.resource_scope(
-                |world, asset_keys: ::bevy::prelude::Mut<::bevy_asset_loader::dynamic_asset::DynamicAssets>| {
+                |world, asset_keys: #bevy_ecs::prelude::Mut<::bevy_asset_loader::dynamic_asset::DynamicAssets>| {
                     #name {
                         #asset_creation
                     }
